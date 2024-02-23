@@ -22,7 +22,7 @@ If you have any technical questions regarding these examples, please feel free t
 * Add the py file for the example you want to run from the repository
 * Run the example in command prompt (see readme that comes included with PySpin for further installation/setup instructions)
 
-## How to run examples (Linux C++/C#/Python)
+## How to run examples (Linux C++/Python)
 * Follow the steps mentioned in the instructions above, navigating to the location you installed Spinnaker or the Spinnaker Python wrapper, in Ubuntu
 
 ## List of Examples
@@ -62,6 +62,12 @@ If you have any technical questions regarding these examples, please feel free t
 
 ### SaveToUserSet (C++, C#, Python)
 * shows how to save custom settings to User Set. By default, it modifies the exposure time to 2000 microseconds, then saves this change to User Set 1.  It can also be configured to reset the camera to factory default settings.
+
+### ShadingCorrection (C++)
+* This example creates and saves a calibration file which is required for camera shading correction.  Options are provided to deploy a calibration file (if already created) from the disk to the camera, or download and save the file from the camera to disk.
+
+### SpinPictureBox (C#)
+* shows how to provide a simple GUI that shows a live stream of the camera feed.
 
 ### Synchronized (C++)
 * shows how to setup multiple FLIR Machine Vision cameras in a primary/secondary configuration, synchronizing image capture.  It relies on users to have followed the hardware layout defined on the FLIR IIS article, "Configuring Synchronized Capture with Multiple Cameras".
