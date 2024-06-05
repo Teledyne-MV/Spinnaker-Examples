@@ -27,6 +27,9 @@ If you have any technical questions regarding these examples, please feel free t
 
 ## List of Examples
 
+### AcquisitionCCM (C++)
+* This example shows how to use host side color correction for image post processing. Images captured can be processed using the Spinnaker color correction features to improve color accuracy. This example relies on information provided in the Acquisition example.
+
 ### AcquisitionOpenCV (C++, C#)
 * This example is a modification of the Spinnaker SDK Example "Acquisition" which demonstrates how to convert a Spinnaker Image to an OpenCV Mat object and display the result using OpenCV HighGUI (Tested with OpenCV 4.1.0)
 
