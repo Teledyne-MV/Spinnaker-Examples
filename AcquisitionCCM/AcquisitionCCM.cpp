@@ -62,10 +62,20 @@ const PixelFormatEnums kExampleImagePixelFormat = PixelFormat_BGR8;
 
 // Set UseExampleCCMCode to true to use the example custom CCM code below instead of going with the
 // pre-defined color correction matrix settings provided in the CCMSettings. This is intended to demonstrate
-// how to load a custom color correction matrix provided by FLIR moving forward. The specific custom code provided
-// here represents the same pre-defined color correction settings for the IMX250 sensor, CLOUDY_6500K temperature
-// and the POLYNOMIAL_9X3 matrix.
+// how to load a custom color correction matrix that is either encrypted based on a known matrix or provided 
+// by FLIR moving forward. The specific custom code provided here is encrypted based on the 9x3 matrix shown
+// below and represents the same pre-defined color correction settings for the IMX250 sensor, CLOUDY_6500K 
+// temperature and the Advanced 9x3 matrix.
 const bool UseExampleCCMCode = false;
+const string kExample9x3Matrix = "1.7383,0.0868,0.3592,"
+                                 "3.4637,-1.0023,3.0529,"
+                                 "-1.8875,-3.4389,-1.6702,"
+                                 "-0.5477,2.9908,-0.2124,"
+                                 "2.4390,-0.6077,2.7653,"
+                                 "-0.4504,-4.5349,-1.1504,"
+                                 "0.1248,-0.7580,3.0707,"
+                                 "2.2196,-1.1149,5.9171,"
+                                 "-0.5653,-3.3670,-4.9294";
 const string kExampleCCMCode = "a3dc9a59f6c7e43ef86ed3c410f6374633d3fbeac484c65e008be07b436d9c053b76408a1f4a39c"
 "e81c75d3377017f33b815dc2666f431c5f776c8ea03a30ad1728dcee90cd5fe55020611a1e1153fbaec9c2110752a4df72b48c8afc151b"
 "1a28a15b25ec38dccd9e336b8f0e53bf486ba024734ea74eb8e5539ff3e738ff4b19370f5958b6529f9751359e6ef1da1f9e34f75d20ac"
@@ -213,7 +223,15 @@ int ConstructCCMSettings(CCMSettings& ccmSettings, string& fileNameSuffix)
     }
     else
     {
-        ccmSettings.CustomCCMCode = kExampleCCMCode;
+        // Custom CCM codes are provided by FLIR upon request or users can encrypt known color correction
+        // matrices specific to their scene through Spinnaker EncryptColorCorrectionMatrix function call.
+        // The matrix can be of either 3x3 Linear CCM or 9x3 Advanced CCM type that is specified in a comma 
+        // separated string.
+
+        // Following call demonstrates encrypting a pre-defined color correction matrix for the IMX250 sensor,
+        // CLOUDY_6500K temperature and the Advanced 9x3 matrix.
+        std::string encrytedCustomCCMCode = ImageUtilityCCM::EncryptColorCorrectionMatrix(kExample9x3Matrix);
+        ccmSettings.CustomCCMCode = encrytedCustomCCMCode;
         fileNameSuffix = "-CustomCCM";
     }
 
@@ -223,6 +241,12 @@ int ConstructCCMSettings(CCMSettings& ccmSettings, string& fileNameSuffix)
 // This function compares the device sensor type to the sensor type specified by the user in the CCM settings. 
 int CheckCCMSensorSetting(CCMSettings& ccmSettings, INodeMap& nodeMap)
 {
+    if (!ccmSettings.CustomCCMCode.empty())
+    {
+        // Skip checking sensor if custom code is provided
+        return 0;
+    }
+
     std::regex pattern("IMX\\d{3}");
     std::smatch match;
 
@@ -280,12 +304,19 @@ int PrintCCMSettings(CCMSettings& ccmSettings, string& fileNameSuffix)
 {
     cout << endl << "*** CCM SETTINGS ***" << endl << endl;
 
-    cout << "Application: " << ImageUtilityCCM::ApplicationToString(ccmSettings.Application) << endl;
-    cout << "Color Temperature: " << ImageUtilityCCM::ColorTemperatureToString(ccmSettings.ColorTemperature) << endl;
-    cout << "Sensor: " << ImageUtilityCCM::SensorToString(ccmSettings.Sensor) << endl;
-    cout << "Type: " << ImageUtilityCCM::TypeToString(ccmSettings.Type) << endl;
-    cout << "Color Space: " << ImageUtilityCCM::ColorSpaceToString(ccmSettings.ColorSpace) << endl;
-    cout << "Custom CCM Code: " << (ccmSettings.CustomCCMCode) << endl;
+    if (ccmSettings.CustomCCMCode.empty())
+    {
+        cout << "Application: " << ImageUtilityCCM::ApplicationToString(ccmSettings.Application) << endl;
+        cout << "Color Temperature: " << ImageUtilityCCM::ColorTemperatureToString(ccmSettings.ColorTemperature)
+             << endl;
+        cout << "Sensor: " << ImageUtilityCCM::SensorToString(ccmSettings.Sensor) << endl;
+        cout << "Type: " << ImageUtilityCCM::TypeToString(ccmSettings.Type) << endl;
+        cout << "Color Space: " << ImageUtilityCCM::ColorSpaceToString(ccmSettings.ColorSpace) << endl;
+    }
+    else
+    {
+        cout << "Custom CCM Code: " << (ccmSettings.CustomCCMCode) << endl;
+    }
     cout << "File suffix: " << fileNameSuffix << endl;
 
     return 0;
