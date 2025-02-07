@@ -72,6 +72,9 @@ If you have any technical questions regarding these examples, please feel free t
 ### SpinPictureBox (C#)
 * shows how to provide a simple GUI that shows a live stream of the camera feed.
 
+### StereoOpenCV (Python)
+* shows how to acquire stereo images from a Teledyne BumbleBee X camera using the PySpin SDK, process rectified and disparity images, and display and save the results.
+
 ### Synchronized (C++)
 * shows how to setup multiple FLIR Machine Vision cameras in a primary/secondary configuration, synchronizing image capture.  It relies on users to have followed the hardware layout defined on the FLIR IIS article, "Configuring Synchronized Capture with Multiple Cameras".
 
