@@ -72,6 +72,12 @@ If you have any technical questions regarding these examples, please feel free t
 ### SpinPictureBox (C#)
 * shows how to provide a simple GUI that shows a live stream of the camera feed.
 
+### StereoDL Examples: End to End Deep Stereo (Python)
+* This example directly estimates high-quality disparity maps from stereo pairs using deep learning models.
+
+### StereoDL Examples: Neural Disparity Refinement (Python)
+* This example refines raw BumbleBee X disparity maps by using the rectified left image as reference.
+
 ### StereoOpenCV (Python)
 * shows how to acquire stereo images from a Teledyne BumbleBee X camera using the PySpin SDK, process rectified and disparity images, and display and save the results.
 
