@@ -90,5 +90,8 @@ If you have any technical questions regarding these examples, please feel free t
 ### TimeSync (C++)
 * This example is a simplified version of the "actioncommand" example, where the application will synchronize the camera's clock with each other, but does not do action commands.
 
+### UtilityStereo (C++, Python)
+* This example shows how to acquire image sets from the BumbleBee X stereo camera, compute 3D information using ImageUtilityStereo functions, and display a depth image (created via CreateDepthImage) along with interactive measurements.
+
 
 
