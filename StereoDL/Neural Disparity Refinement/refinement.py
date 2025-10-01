@@ -144,6 +144,8 @@ def convert_to_cv_image(pyspin_image):
         pixel_format = pyspin_image.GetPixelFormatName()
         if pixel_format == 'RGB8':
             np_image = cv2.cvtColor(np_image, cv2.COLOR_RGB2BGR)
+        elif pixel_format == 'Mono8':
+            np_image = cv2.cvtColor(np_image, cv2.COLOR_GRAY2BGR)
         elif pixel_format == 'Mono16':
             np_image = np_image.astype(np.int16)
         else:
@@ -298,13 +300,14 @@ def acquire_images(cam, nodemap, nodemap_tldevice):
                 
                 # Compute camera depth map
                 with np.errstate(divide='ignore', invalid='ignore'):
+                    SGM_disp_cleaned[SGM_disp_cleaned != stereo_params.invalidDataValue] += stereo_params.coordinateOffset
                     SGM_depth = np.where(SGM_disp_cleaned > 0,
                                           stereo_params.focalLength * stereo_params.baseline / SGM_disp_cleaned,
                                           0)
                 SGM_depth_clipped = np.clip(SGM_depth, 0, MAX_DEPTH)
                 SGM_depth_vis = 255 - ((SGM_depth_clipped / MAX_DEPTH) * 255).astype(np.uint8)
                 SGM_depth_color = cv2.applyColorMap(SGM_depth_vis, cv2.COLORMAP_JET)
-                SGM_depth_color[SGM_disp_cleaned == 0] = [0, 0, 0]
+                SGM_depth_color[SGM_disp_cleaned == stereo_params.invalidDataValue] = [0, 0, 0]
                 SGM_depth_color_resized = cv2.resize(SGM_depth_color, (width // 2, height // 2))
                 
                 # Before computing the refined depth, check if a refined disparity is available.
@@ -314,13 +317,14 @@ def acquire_images(cam, nodemap, nodemap_tldevice):
 
                 # Get refined depth map
                 with np.errstate(divide='ignore', invalid='ignore'):
+                    refined_disp[refined_disp != stereo_params.invalidDataValue] += stereo_params.coordinateOffset
                     refined_depth = np.where(refined_disp > 0,
                                              stereo_params.focalLength * stereo_params.baseline / refined_disp,
                                              0)
                 refined_depth_clipped = np.clip(refined_depth, 0, MAX_DEPTH)
                 refined_depth_vis = 255 - ((refined_depth_clipped / MAX_DEPTH) * 255).astype(np.uint8)
                 refined_depth_color = cv2.applyColorMap(refined_depth_vis, cv2.COLORMAP_JET)
-                refined_depth_color[latest_refined_disp == 0] = [0, 0, 0]
+                refined_depth_color[latest_refined_disp == stereo_params.invalidDataValue] = [0, 0, 0]
                 refined_depth_color_resized = cv2.resize(refined_depth_color, (width // 2, height // 2))
                 
                 # Overlay text (using computed distances from SGM and refined disparity)
