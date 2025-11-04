@@ -40,7 +40,7 @@ It helps identify potential misalignment or calibration drift in stereo setup.
 Runs live from the Bumblebee X stereo camera and averages offsets across 10 frames.
 
 ```bash
-python3 calibration_check.py
+python3 StereoCalibrationCheck.py
 ```
 
 Example output:
@@ -56,7 +56,7 @@ Verdict: Camera appears well calibrated.
 ### B) **File Mode**
 Compute row offset using saved rectified stereo images:
 ```bash
-python3 calibration_check.py --left left_rect.png --right right_rect.png --show
+python3 StereoCalibrationCheck.py --left left_rect.png --right right_rect.png --show
 ```
 Displays matched features and prints average offset.
 
