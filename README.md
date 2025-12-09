@@ -75,6 +75,9 @@ If you have any technical questions regarding these examples, please feel free t
 ### StereoDL Examples: End to End Deep Stereo (Python)
 * This example directly estimates high-quality disparity maps from stereo pairs using deep learning models.
 
+### StereoDL Examples: Foundation Stereo (Python)
+* This example directly estimates high-quality disparity maps from stereo pairs using FoundationStereo.
+
 ### StereoDL Examples: Neural Disparity Refinement (Python)
 * This example refines raw BumbleBee X disparity maps by using the rectified left image as reference.
 
