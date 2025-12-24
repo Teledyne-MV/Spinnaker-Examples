@@ -119,6 +119,32 @@ def configure_stereo_params(params, nodemap):
     params.focalLength = get_node_value(nodemap, 'Scan3dFocalLength')
     params.principalPointU = get_node_value(nodemap, 'Scan3dPrincipalPointU')
     params.principalPointV = get_node_value(nodemap, 'Scan3dPrincipalPointV')
+    
+    
+def enable_software_trigger(cam):
+    nm = cam.GetNodeMap()
+    src = PySpin.CEnumerationPtr(nm.GetNode('TriggerSource'))
+    src.SetIntValue(src.GetEntryByName('Software').GetValue())
+    mode = PySpin.CEnumerationPtr(nm.GetNode('TriggerMode'))
+    mode.SetIntValue(mode.GetEntryByName('Off').GetValue())
+    sel = PySpin.CEnumerationPtr(nm.GetNode('TriggerSelector'))
+    sel.SetIntValue(sel.GetEntryByName('FrameStart').GetValue())
+    mode.SetIntValue(mode.GetEntryByName('On').GetValue())
+
+    
+def disable_software_trigger(cam):
+    nm = cam.GetNodeMap()
+
+    # Just turn TriggerMode OFF
+    mode = PySpin.CEnumerationPtr(nm.GetNode('TriggerMode'))
+    if not PySpin.IsAvailable(mode) or not PySpin.IsWritable(mode):
+        print("TriggerMode not available/writable")
+        return
+
+    mode_off = mode.GetEntryByName('Off')
+    mode.SetIntValue(mode_off.GetValue())
+    print("Software trigger disabled (TriggerMode=Off)")
+
 
 
 # ---------------- Disparity -> point cloud + PLY writer ----------------
@@ -127,11 +153,6 @@ def disparity_to_pointcloud(disp, left_img_bgr, stereo_params, decimation=2):
     Returns (points Nx3 float32, colors Nx3 float32 in 0..1)
     """
     h, w = disp.shape
-
-    # Optional speckle filtering with OpenCV expects 16S fixed-point disparity
-    disp16 = (disp * 256.0).astype(np.int16)
-    cv2.filterSpeckles(disp16, 0, 1000, 256)
-    disp = disp16.astype(np.float32) / 256.0
 
     # Cull disparities that imply depth > MAX_DEPTH
     MIN_DISP = max(1e-6, (stereo_params.focalLength * stereo_params.baseline) / MAX_DEPTH)
@@ -191,10 +212,10 @@ def write_ply(filename, points_xyz, colors_rgb):
 def save_disparity_outputs(basepath, disp_f32):
     """
     Saves:
-      - {basepath}_disp16.png (16U, disparity*256)
+      - {basepath}_disp16.png (16U, disparity*64)
     """
     # 16-bit PNG
-    disp16 = np.clip(disp_f32 * 256.0, 0, 65535).astype(np.uint16)
+    disp16 = np.clip(disp_f32 * 64.0, 0, 65535).astype(np.uint16)
     png16_path = f"{basepath}_disp16.png"
     cv2.imwrite(png16_path, disp16)
     print(f"[SAVE] Disparity (16U PNG): {png16_path}")
@@ -211,6 +232,7 @@ def main():
         return
     cam = cam_list.GetByIndex(0)
     cam.Init()
+    enable_software_trigger(cam)
 
     # --- fetch nodemaps and stream mode ---
     serial_number = cam.DeviceSerialNumber.ToString()
@@ -233,6 +255,7 @@ def main():
         while True:
             image_list = None
             try:
+                cam.TriggerSoftware()
                 image_list = cam.GetNextImageSync(2000)
             except PySpin.SpinnakerException as ex:
                 print("GetNextImageSync timed out or failed:", ex)
@@ -258,11 +281,17 @@ def main():
                 disp = deep_learning_inference(model, args, left_cv, right_cv)
                 fps = 1.0 / max(1e-6, (time.time() - t0))
                 print(f"[DL] FPS: {fps:.2f}   disp_max: {np.max(disp):.3f}")
+                
+                # Optional speckle filtering with OpenCV expects 16S fixed-point disparity
+                #disp16 = (disp * 64.0).astype(np.int16)
+                #cv2.filterSpeckles(disp16, 0, 200, 4 * 64)
+                #disp = disp16.astype(np.float32) / 64.0
 
                 # Normalize disparity for display
                 dmax = max(1e-6, float(np.max(disp)))
                 disp_norm = np.clip(disp / dmax * 255.0, 0, 255).astype(np.uint8)
                 disp_color = cv2.applyColorMap(disp_norm, cv2.COLORMAP_JET)
+                disp_color[disp==0] = (0, 0, 0)
 
                 # Show images (half-res preview)
                 cv2.imshow('Left Image', cv2.resize(left_cv, (left_cv.shape[1]//2, left_cv.shape[0]//2)))
@@ -305,6 +334,7 @@ def main():
     finally:
         try:
             cam.EndAcquisition()
+            disable_software_trigger(cam)
             cam.DeInit()
             del cam
         except Exception:
