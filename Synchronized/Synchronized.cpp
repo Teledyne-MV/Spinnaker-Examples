@@ -36,7 +36,11 @@
 #include <vector>
 #include <iomanip>
 #include <omp.h>
-#include <direct.h>
+#ifdef _WIN32
+# include <direct.h>
+#else
+# include <sys/stat.h>
+#endif
 #include <string>
 
 using namespace Spinnaker;
@@ -243,7 +247,7 @@ int ConfigureCameraSettings(INodeMap & nodeMap, gcstring cameraModel)
 
         // Turn on Acquisition Frame Rate Enable
         CBooleanPtr ptrFrameRateEnable = nodeMap.GetNode("AcquisitionFrameRateEnable");
-        if (ptrFrameRateEnable == NULL)
+        if (ptrFrameRateEnable == nullptr)
         {
             // Acquisition Frame Rate Enabled (with a "d" at the end) is used for Gen2 cameras
             ptrFrameRateEnable = nodeMap.GetNode("AcquisitionFrameRateEnabled");
@@ -376,7 +380,7 @@ int ConfigureChunkData(INodeMap & nodeMap)
 
         // Enable Frame ID Chunk Data
         CEnumEntryPtr ptrChunkSelectorFrameID = ptrChunkSelector->GetEntryByName("FrameID");
-        if (ptrChunkSelectorFrameID == NULL)
+        if (ptrChunkSelectorFrameID == nullptr)
         {
             // Frame Counter is used for Gen2 cameras
             ptrChunkSelectorFrameID = ptrChunkSelector->GetEntryByName("FrameCounter");
@@ -439,6 +443,18 @@ int SetupPrimaryCam(INodeMap & nodeMap, gcstring cameraModel)
             }
             ptrLineSelector->SetIntValue(ptrLineSelectorLine2->GetValue());
             cout << "Line Selector:                 " << ptrLineSelector->GetCurrentEntry()->GetSymbolic() << endl;
+        }
+
+        if (cameraModel.find(cameraFamilyBFS) != std::string::npos)
+        {
+            CEnumEntryPtr ptrLineSelectorLine1 = ptrLineSelector->GetEntryByName("Line1");
+            if (!IsAvailable(ptrLineSelectorLine1) || !IsReadable(ptrLineSelectorLine1))
+            {
+                cout << "Unable to set [Line Selector] to [Line1]. Aborting..." << endl;
+                return -1;
+            }
+            ptrLineSelector->SetIntValue(ptrLineSelectorLine1->GetValue());
+            cout << "Line Selector: " << ptrLineSelector->GetCurrentEntry()->GetSymbolic() << endl;
         }
 
         // Set Line Mode to Output
@@ -791,7 +807,7 @@ int AcquireImages(CameraList camList, unsigned int primaryIndex)
                         }
 
                         // Convert the image
-                        pImages.push_back(pResultImage->Convert(PixelFormat_Mono8, HQ_LINEAR));
+                        pImages.push_back(pResultImage); //->Convert(PixelFormat_Mono8, HQ_LINEAR));
 
                     }
                     // Release image
@@ -819,8 +835,12 @@ int AcquireImages(CameraList camList, unsigned int primaryIndex)
                     int offset = imageCnt * camList.GetSize() + i;
 
                     // Create a unique filename
-                    string Dir = "Camera " + serialNumbers[i] + " images";
+                    string Dir = "Camera " + std::string(serialNumbers[i].c_str()) + " images";
+#ifdef _WIN32
                     _mkdir(Dir.c_str());
+#else
+                    mkdir(Dir.c_str(), 0777);
+#endif
                     ostringstream filename;
                     filename << ".\\" + Dir + "\\" << serialNumbers[i] << "-" << imageCnt << ".jpg";
 
