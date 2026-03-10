@@ -27,10 +27,9 @@
 import os
 import PySpin
 import sys
-import platform
 import cv2
 import numpy as np
-import time
+import argparse
 
 # -----------------------------------------------------------------------------
 # Global variables for mouse callback and image display
@@ -39,8 +38,6 @@ global_rect_left_image_resized = None   # Current displayed (resized) rectified 
 global_depth_image_resized = None       # Current displayed (resized) depth image (from CreateDepthImage)
 global_disp_image_ptr = None            # Original PySpin disparity image pointer (for API calls)
 global_stereo_params = None             # Current stereo camera parameters
-global_fail_counter = 0
-text_distance = None
 text_point = None
 clicked_points = []                     # List to store clicked points as tuples: ((x_disp, y_disp), imagePixel, stereo3DPoint)
 global_mouse_x = 0
@@ -58,14 +55,12 @@ def mouse_callback(event, x, y, flags, param):
       - Compute the distance from the camera to that pixel (using ComputeDistanceToPoint)
       - When two points are clicked, compute the distance between them (using ComputeDistanceBetweenPoints)
     """
-    global global_rect_left_image_resized, global_disp_image_ptr, global_stereo_params, clicked_points, text_distance, text_point, global_mouse_x, global_mouse_y, global_measurement
+    global global_rect_left_image_resized, global_disp_image_ptr, global_stereo_params, clicked_points, text_point, global_mouse_x, global_mouse_y, global_measurement
 
-    # Since the displayed left image is resized (e.g., half-size), convert display coordinates back to original coordinates.
-    scale = 2  # Adjust if your resize factor is different.
     global_mouse_x = int(x)
     global_mouse_y = int(y)
-    x_orig = int(x * scale)
-    y_orig = int(y * scale)
+    x_orig = x
+    y_orig = y
 
     if global_rect_left_image_resized is None or global_disp_image_ptr is None:
         return
@@ -99,13 +94,14 @@ def mouse_callback(event, x, y, flags, param):
     PySpin.ImageUtilityStereo.Compute3DPointFromPixel(int(disp_value), global_stereo_params, stereo3DPoint)
 
     # Prepare to compute distance from camera to this pixel.
-    success_dist = True
     distance = PySpin.ImageUtilityStereo.ComputeDistanceToPoint(global_disp_image_ptr, global_stereo_params, imagePixel)
     
     # On mouse movement, overlay the computed 3D coordinates and distance.
     if event == cv2.EVENT_MOUSEMOVE:
-        text_point = f"(X: {stereo3DPoint.x:.2f}, Y: {stereo3DPoint.y:.2f}, Z: {stereo3DPoint.z:.2f})"
-        text_distance = f"Dist: {distance: .2f} m"
+        if distance is not None:
+            text_point = f"({stereo3DPoint.x:.2f}, {stereo3DPoint.y:.2f}, {stereo3DPoint.z:.2f}) Dist: {distance:.2f} m"
+        else:
+            text_point = None
     
 
     # On left mouse button click, record the point for later distance measurement between two points.
@@ -148,6 +144,21 @@ def get_node_value(nodemap, node_name, data_type='float'):
         print(f"Node {node_name} not available or not readable.")
         return None
     return node.GetValue()
+
+def set_node_value(nodemap, node_name, value, data_type='float'):
+    if data_type == 'float':
+        node = PySpin.CFloatPtr(nodemap.GetNode(node_name))
+    elif data_type == 'int':
+        node = PySpin.CIntegerPtr(nodemap.GetNode(node_name))
+    else:
+        print(f"Unsupported data_type '{data_type}' for set_node_value.")
+        return False
+    if not PySpin.IsAvailable(node) or not PySpin.IsWritable(node):
+        print(f"Node {node_name} not available or not writable.")
+        return False
+    node.SetValue(value)
+    print(f"{node_name} set to {value}")
+    return True
 
 def configure_stereo_params(stereo_params, nodemap):
     coord_offset = get_node_value(nodemap, 'Scan3dCoordinateOffset', 'float')
@@ -247,8 +258,8 @@ def convert_to_cv_image(pyspin_image):
 # -----------------------------------------------------------------------------
 # Image Acquisition and Processing
 # -----------------------------------------------------------------------------
-def acquire_images(cam, nodemap, nodemap_tldevice):
-    global global_rect_left_image_resized, global_depth_image_resized, global_disp_image_ptr, global_stereo_params, global_mouse_x, global_mouse_y, text_distance
+def acquire_images(cam, nodemap, nodemap_tldevice, args):
+    global global_rect_left_image_resized, global_disp_image_ptr, global_stereo_params, global_mouse_x, global_mouse_y
 
     try:
         result = True
@@ -274,11 +285,21 @@ def acquire_images(cam, nodemap, nodemap_tldevice):
             'disparityTransmitEnabled': True
         }
 
+        # Apply SGM parameters from command line if provided.
+        if args.min_disparity is not None:
+            set_node_value(nodemap, 'Scan3dCoordinateOffset', args.min_disparity, 'float')
+        if args.p1 is not None:
+            set_node_value(nodemap, 'SmallPenalty', args.p1, 'int')
+        if args.p2 is not None:
+            set_node_value(nodemap, 'LargePenalty', args.p2, 'int')
+        if args.uniqueness_ratio is not None:
+            set_node_value(nodemap, 'UniquenessRatio', args.uniqueness_ratio, 'int')
+
         # Get and configure stereo parameters.
         stereo_params = PySpin.StereoCameraParameters()
         configure_stereo_params(stereo_params, nodemap)
         print('*** STEREO PARAMETERS *** ')
-        # print_stereo_params(stereo_params)
+        print_stereo_params(stereo_params)
         global_stereo_params = stereo_params
 
         print('Starting continuous image acquisition. Press "s" to save images, "Esc" to exit.')
@@ -329,19 +350,16 @@ def acquire_images(cam, nodemap, nodemap_tldevice):
                     print('Failed to convert images to OpenCV format.')
                     continue
 
-                # Resize the rectified left image for display (e.g., half-size).
-                height, width = rect_left_cv_image.shape[:2]
-                rect_left_cv_image_resized = cv2.resize(rect_left_cv_image, (width // 2, height // 2))
+                # Display at full resolution.
+                rect_left_cv_image_resized = rect_left_cv_image.copy()
                 global_rect_left_image_resized = rect_left_cv_image_resized
 
-                # Resize the depth image similarly for display.
-                depth_cv_image_resized = cv2.resize(depth_cv_image, (width // 2, height // 2))
-                mask_valid = (depth_cv_image_resized >= 0) & (depth_cv_image_resized <= MAX_DEPTH)
-                depth_clipped = np.clip(depth_cv_image_resized, 0, MAX_DEPTH)
+                # Create depth colormap at full resolution.
+                depth_clipped = np.clip(depth_cv_image, 0, MAX_DEPTH)
                 depth_normalized = cv2.convertScaleAbs(depth_clipped, alpha=(255.0/MAX_DEPTH))
                 depth_normalized = depth_normalized.astype(np.uint8)
                 depth_colormap = cv2.applyColorMap(depth_normalized, cv2.COLORMAP_JET)
-                depth_colormap[~mask_valid] = (0, 0, 0)
+                depth_colormap[depth_cv_image == int(stereo_params.invalidDataValue)] = (0, 0, 0)
 
                 # Save the original disparity image pointer for 3D computations.
                 global_disp_image_ptr = disparity_image
@@ -351,8 +369,8 @@ def acquire_images(cam, nodemap, nodemap_tldevice):
                 cv2.setMouseCallback('Rectified Left Image', mouse_callback)
 
                 # Display images.
-                cv2.putText(rect_left_cv_image_resized, text_point, (global_mouse_x, global_mouse_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-                cv2.putText(rect_left_cv_image_resized, text_distance, (global_mouse_x, global_mouse_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+                if text_point is not None:
+                    cv2.putText(rect_left_cv_image_resized, text_point, (global_mouse_x, global_mouse_y), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
                 if global_measurement is not None:
                     (pt1, pt2), d = global_measurement
                     cv2.line(rect_left_cv_image_resized, pt1, pt2, (0, 0, 255), 2)
@@ -371,6 +389,7 @@ def acquire_images(cam, nodemap, nodemap_tldevice):
                     print('Images saved.')
                 elif key == 27:  # Esc key.
                     print('Exit key pressed.')
+                    image_list.Release()
                     break
 
                 image_list.Release()
@@ -381,10 +400,20 @@ def acquire_images(cam, nodemap, nodemap_tldevice):
                 print("Exiting acquisition loop...")
                 break
 
+        global_disp_image_ptr = None
         cam.EndAcquisition()
         cv2.destroyAllWindows()
     except PySpin.SpinnakerException as ex:
         print('Error: %s' % ex)
+        return False
+    except KeyboardInterrupt:
+        print("Interrupted. Cleaning up...")
+        global_disp_image_ptr = None
+        try:
+            cam.EndAcquisition()
+        except:
+            pass
+        cv2.destroyAllWindows()
         return False
 
     return result
@@ -399,20 +428,35 @@ def save_depth_image(image, filename_prefix):
     cv2.imwrite(filename, image)
     print('Depth image saved to %s' % filename)
 
-def run_single_camera(cam):
+def run_single_camera(cam, args):
     try:
         result = True
         nodemap_tldevice = cam.GetTLDeviceNodeMap()
         cam.Init()
         nodemap = cam.GetNodeMap()
-        result &= acquire_images(cam, nodemap, nodemap_tldevice)
+        result &= acquire_images(cam, nodemap, nodemap_tldevice, args)
         cam.DeInit()
     except PySpin.SpinnakerException as ex:
         print('Error: %s' % ex)
         result = False
+    del nodemap_tldevice, nodemap
     return result
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='ImageUtilityStereo - BumbleBee X stereo camera viewer')
+    parser.add_argument('--min-disparity', type=float, default=None,
+                        help='Set Scan3dCoordinateOffset (min disparity)')
+    parser.add_argument('--p1', type=int, default=None,
+                        help='Set SmallPenalty (P1)')
+    parser.add_argument('--p2', type=int, default=None,
+                        help='Set LargePenalty (P2)')
+    parser.add_argument('--uniqueness-ratio', type=int, default=None,
+                        help='Set UniquenessRatio')
+    return parser.parse_args()
+
 def main():
+    args = parse_args()
+
     try:
         test_file = open('test.txt', 'w+')
         test_file.close()
@@ -439,7 +483,7 @@ def main():
 
     for i, cam in enumerate(cam_list):
         print('Running example for camera %d...' % i)
-        result &= run_single_camera(cam)
+        result &= run_single_camera(cam, args)
         print('Camera %d example complete...\n' % i)
         del cam
 

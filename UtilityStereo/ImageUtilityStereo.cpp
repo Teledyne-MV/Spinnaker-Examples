@@ -26,6 +26,9 @@
 
 #include <iostream>
 #include <sstream>
+#include <cstdlib>
+#include <cstring>
+#include <csignal>
 #include <opencv2/opencv.hpp>
 #include "Spinnaker.h"
 #include "SpinGenApi/SpinnakerGenApi.h"
@@ -43,14 +46,18 @@ static StereoCameraParameters g_stereoParams;
 static cv::Point g_click1;
 static bool g_firstClicked = false;
 static float g_lastDist = 0.0f;
+static volatile bool g_running = true;
+
+void signalHandler(int) {
+    g_running = false;
+}
 
 // Mouse callback: compute 3D coords and distances
 void onMouse(int event, int x, int y, int flags, void*) {
     if (g_rectResized.empty() || !g_dispPtr) return;
 
-    // Reverse scaling (display is half-size)
-    int origX = x * 2;
-    int origY = y * 2;
+    int origX = x;
+    int origY = y;
 
     // Access disparity data pointer (uint16_t array)
     unsigned int w = g_dispPtr->GetWidth();
@@ -81,8 +88,8 @@ void onMouse(int event, int x, int y, int flags, void*) {
             float distPts = 0.0f;
             bool okPts = ImageUtilityStereo::ComputeDistanceBetweenPoints(
                 g_dispPtr, g_stereoParams,
-                ImagePixel{ static_cast<uint32_t>(g_click1.x * 2), static_cast<uint32_t>(g_click1.y * 2) },
-                ImagePixel{ static_cast<uint32_t>(click2.x * 2), static_cast<uint32_t>(click2.y * 2) },
+                ImagePixel{ static_cast<uint32_t>(g_click1.x), static_cast<uint32_t>(g_click1.y) },
+                ImagePixel{ static_cast<uint32_t>(click2.x), static_cast<uint32_t>(click2.y) },
                 distPts
             );
 
@@ -104,7 +111,7 @@ void onMouse(int event, int x, int y, int flags, void*) {
     if (okXYZ && okDist) {
         cv::putText(overlay,
             cv::format("(%.2f, %.2f, %.2f) Dist: %.2f m", pt3d.x, pt3d.y, pt3d.z, dist),
-            cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
+            cv::Point(x, y), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);
     }
 
     if (g_lastDist > 0.0f) {
@@ -121,14 +128,54 @@ bool validateImageList(ImageList& imgs) {
     return rect && !rect->IsIncomplete() && disp && !disp->IsIncomplete();
 }
 
+// Set an integer node to a specific value
+void setIntNode(INodeMap& nodemap, const string& name, int64_t value) {
+    CIntegerPtr node = nodemap.GetNode(name.c_str());
+    if (IsReadable(node) && IsWritable(node)) {
+        node->SetValue(value);
+        cout << name << " set to " << value << endl;
+    } else {
+        cout << name << " not available or not writable." << endl;
+    }
+}
+
+// Set a float node to a specific value
+void setFloatNode(INodeMap& nodemap, const string& name, double value) {
+    CFloatPtr node = nodemap.GetNode(name.c_str());
+    if (IsReadable(node) && IsWritable(node)) {
+        node->SetValue(value);
+        cout << name << " set to " << value << endl;
+    } else {
+        cout << name << " not available or not writable." << endl;
+    }
+}
+
+// Parsed command-line SGM parameters
+struct SgmParams {
+    bool hasMinDisparity = false;
+    double minDisparity = 0.0;
+    bool hasP1 = false;
+    int64_t p1 = 0;
+    bool hasP2 = false;
+    int64_t p2 = 0;
+    bool hasUniquenessRatio = false;
+    int64_t uniquenessRatio = 0;
+};
+
 // Function to acquire and process images from the camera
-bool acquireImages(CameraPtr cam) {
+bool acquireImages(CameraPtr cam, const SgmParams& sgm) {
     try {
         cam->BeginAcquisition();
         cout << "Starting acquisition..." << endl;
 
         // Read stereo params from node map
         INodeMap& nodemap = cam->GetNodeMap();
+
+        // Apply SGM parameters from command line if provided
+        if (sgm.hasMinDisparity) setFloatNode(nodemap, "Scan3dCoordinateOffset", sgm.minDisparity);
+        if (sgm.hasP1) setIntNode(nodemap, "SmallPenalty", sgm.p1);
+        if (sgm.hasP2) setIntNode(nodemap, "LargePenalty", sgm.p2);
+        if (sgm.hasUniquenessRatio) setIntNode(nodemap, "UniquenessRatio", sgm.uniquenessRatio);
 
         // Retrieve and read stereo parameters from camera node map
         CFloatPtr fptr;
@@ -162,7 +209,7 @@ bool acquireImages(CameraPtr cam) {
         cout << "Stereo parameters loaded." << endl;
 
         uint64_t timeout = 2000;
-        while (true) {
+        while (g_running) {
             ImageList imgs = cam->GetNextImageSync(timeout);
             if (!validateImageList(imgs)) { imgs.Release(); continue; }
 
@@ -203,8 +250,8 @@ bool acquireImages(CameraPtr cam) {
             color.setTo(cv::Scalar(0, 0, 0), depth16 == g_stereoParams.invalidDataValue);
 
             // Prepare global display mats
-            cv::resize(rectMat, g_rectResized, cv::Size(), 0.5, 0.5);
-            cv::resize(color, g_depthColor, cv::Size(), 0.5, 0.5);
+            g_rectResized = rectMat.clone();
+            g_depthColor = color.clone();
             g_dispPtr = dispImg;
 
             // Show windows
@@ -214,7 +261,7 @@ bool acquireImages(CameraPtr cam) {
             cv::imshow("Depth Image", g_depthColor);
 
             int key = cv::waitKey(1);
-            if (key == 27) break; // Esc
+            if (key == 27) { imgs.Release(); break; } // Esc
             if (key == 's' || key == 'S') {
                 static int idx = 0;
                 string base = "Capture_" + to_string(idx++);
@@ -235,7 +282,41 @@ bool acquireImages(CameraPtr cam) {
     return true;
 }
 
-int main() {
+void printUsage(const char* prog) {
+    cout << "Usage: " << prog << " [options]" << endl;
+    cout << "  --min-disparity <float>   Set Scan3dCoordinateOffset" << endl;
+    cout << "  --p1 <int>               Set SmallPenalty (P1)" << endl;
+    cout << "  --p2 <int>               Set LargePenalty (P2)" << endl;
+    cout << "  --uniqueness-ratio <int>  Set UniquenessRatio" << endl;
+}
+
+int main(int argc, char* argv[]) {
+    signal(SIGINT, signalHandler);
+
+    SgmParams sgm;
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--min-disparity") == 0 && i + 1 < argc) {
+            sgm.hasMinDisparity = true;
+            sgm.minDisparity = atof(argv[++i]);
+        } else if (strcmp(argv[i], "--p1") == 0 && i + 1 < argc) {
+            sgm.hasP1 = true;
+            sgm.p1 = atoll(argv[++i]);
+        } else if (strcmp(argv[i], "--p2") == 0 && i + 1 < argc) {
+            sgm.hasP2 = true;
+            sgm.p2 = atoll(argv[++i]);
+        } else if (strcmp(argv[i], "--uniqueness-ratio") == 0 && i + 1 < argc) {
+            sgm.hasUniquenessRatio = true;
+            sgm.uniquenessRatio = atoll(argv[++i]);
+        } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            printUsage(argv[0]);
+            return 0;
+        } else {
+            cerr << "Unknown option: " << argv[i] << endl;
+            printUsage(argv[0]);
+            return -1;
+        }
+    }
+
     // Verify write access
     FILE* test = fopen("test.txt", "w+");
     if (!test) {
@@ -266,7 +347,7 @@ int main() {
         CameraPtr cam = cams.GetByIndex(i);
         cout << "Running camera " << i << "..." << endl;
         cam->Init();
-        ok &= acquireImages(cam);
+        ok &= acquireImages(cam, sgm);
         cam->DeInit();
     }
 

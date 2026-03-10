@@ -43,7 +43,29 @@ Step 2: Configure Visual Studio Project
 ## Usage
 
 1. Ensure your BumbleBee X stereo camera is connected and powered before running the example.
-2. The example will:
+
+2. Optional command-line arguments to configure SGM stereo parameters:
+
+| Argument | Type | Description |
+|---|---|---|
+| `--min-disparity` | float | Set minimum disparity (Scan3dCoordinateOffset) |
+| `--p1` | int | Set P1 penalty (SmallPenalty) |
+| `--p2` | int | Set P2 penalty (LargePenalty) |
+| `--uniqueness-ratio` | int | Set uniqueness ratio (UniquenessRatio) |
+
+   **Python:**
+   ```
+   python3 ImageUtilityStereo.py --min-disparity 10 --p1 8 --p2 32 --uniqueness-ratio 15
+   ```
+
+   **C++:**
+   ```
+   ./ImageUtilityStereo --min-disparity 10 --p1 8 --p2 32 --uniqueness-ratio 15
+   ```
+
+   If an argument is omitted, the camera's current value is used.
+
+3. The example will:
    - Detect connected cameras.
    - Continuously acquire images.
    - Display rectified left and disparity images.
