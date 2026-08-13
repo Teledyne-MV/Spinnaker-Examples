@@ -33,6 +33,9 @@ If you have any technical questions regarding these examples, please feel free t
 ### AcquisitionOpenCV (C++, C#)
 * This example is a modification of the Spinnaker SDK Example "Acquisition" which demonstrates how to convert a Spinnaker Image to an OpenCV Mat object and display the result using OpenCV HighGUI (Tested with OpenCV 4.1.0)
 
+### ActionCommand_Counters (C++)
+This example shows how to use Camera Generated action commands to synchronize image capture between 2 or more GigE cameras, using Counters to create a very precise framerate; this example measures and output both the accuracy of the synchronization, as well as the framerates of two of the connected cameras.
+
 ### CameraTimeToPCTime (C++, C#, Python)
 * This example converts camera's image timestamp to PC system time and saves 10 images, using the PC System time as a part of the file name for each image file.
 
