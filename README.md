@@ -1,13 +1,13 @@
 # Overview
 
-This repository is made up of additional examples to the ones provided in the Spinnaker SDK, meant to be used with Teledyne FLIR Machine Vision Cameras.  Users are expected to be fairly familiar with the Spinnaker SDK and API before using the examples from this list.
+This repository is made up of additional examples to the ones provided in the Spinnaker SDK, meant to be used with Teledyne FLIR Machine Vision Cameras.  Users are expected to be fairly familiar with the Spinnaker SDK and API before using the examples from this list. 
 
 **Please Note:**
 If you have any technical questions regarding these examples, please feel free to add a comment, or go to flir.custhelp.com and select “Ask a question”.
  
 ## How to run examples (Windows C++)
-* Install Spinnaker SDK.  
-* Navigate to the src folder of the Spinnaker directory (default location; C:\Program Files\FLIR Systems\Spinnaker\src), then to the Acquisition Folder
+* Install the latest Spinnaker SDK.  
+* Navigate to the src folder of the Spinnaker directory (default location; C:\Program Files\Teledyne\Spinnaker\src), then to the Acquisition Folder
 * Rename the Acquisition cpp file (for example, "AcquisitionOriginal")
 * Using the cpp file for the example you want to run from the repository, rename the file to "Acquisition" and place into the Acquisition Folder
 * Compile the example in Visual Studio as normal
@@ -17,7 +17,7 @@ If you have any technical questions regarding these examples, please feel free t
 
 ## How to run examples (Windows Python)
 * Install Spinnaker SDK.  
-* Install Spinnaker Python Wrapper
+* Install Spinnaker Python Wrapper (PySpin)
 * Navigate to the examples folder of the Spinnaker Python directory (default location for cp35; C:\Users\USERNAME\AppData\Local\Programs\Python\Python35\PySpin\Examples)
 * Add the py file for the example you want to run from the repository
 * Run the example in command prompt (see readme that comes included with PySpin for further installation/setup instructions)
@@ -29,6 +29,9 @@ If you have any technical questions regarding these examples, please feel free t
 
 ### AcquisitionCCM (C++)
 * This example shows how to use host side color correction for image post processing. Images captured can be processed using the Spinnaker color correction features to improve color accuracy. This example relies on information provided in the Acquisition example.
+
+### AcquisitionGenDC (C++, C#)
+* This example demonstrates how to acquire multi-component images using the GenDC (Generic Data Container) payload format
 
 ### AcquisitionOpenCV (C++, C#)
 * This example is a modification of the Spinnaker SDK Example "Acquisition" which demonstrates how to convert a Spinnaker Image to an OpenCV Mat object and display the result using OpenCV HighGUI (Tested with OpenCV 4.1.0)
